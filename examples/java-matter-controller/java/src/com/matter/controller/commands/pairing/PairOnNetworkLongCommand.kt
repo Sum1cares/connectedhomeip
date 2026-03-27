@@ -18,6 +18,7 @@
 package com.matter.controller.commands.pairing
 
 import chip.devicecontroller.ChipDeviceController
+import chip.devicecontroller.CommissionParameters
 import com.matter.controller.commands.common.CredentialsIssuer
 
 private const val MATTER_PORT = 5540
@@ -42,7 +43,7 @@ class PairOnNetworkLongCommand(
         MATTER_PORT,
         getDiscriminator(),
         getSetupPINCode(),
-        null
+        CommissionParameters.Builder().build()
       )
     currentCommissioner().setCompletionListener(this)
     waitCompleteMs(getTimeoutMillis())

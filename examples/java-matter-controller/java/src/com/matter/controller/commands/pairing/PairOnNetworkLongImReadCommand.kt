@@ -1,6 +1,7 @@
 package com.matter.controller.commands.pairing
 
 import chip.devicecontroller.ChipDeviceController
+import chip.devicecontroller.CommissionParameters
 import chip.devicecontroller.GetConnectedDeviceCallbackJni.GetConnectedDeviceCallback
 import chip.devicecontroller.ReportCallback
 import chip.devicecontroller.model.AttributeState
@@ -210,7 +211,7 @@ class PairOnNetworkLongImReadCommand(
         MATTER_PORT,
         getDiscriminator(),
         getSetupPINCode(),
-        null
+        CommissionParameters.Builder().build()
       )
     currentCommissioner().setCompletionListener(this)
     waitCompleteMs(getTimeoutMillis())
