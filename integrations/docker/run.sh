@@ -61,6 +61,7 @@ help() {
   Any number of 'docker run' options can be passed
      through to the invocation.  Terminate this list of
      options with '--' to begin command and arguments.
+     Run 'docker run --help' for more information.
 
   Examples:
     To run bash interactively:
