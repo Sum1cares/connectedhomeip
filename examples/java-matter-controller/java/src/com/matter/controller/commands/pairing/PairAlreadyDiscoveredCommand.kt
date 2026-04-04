@@ -18,6 +18,7 @@
 package com.matter.controller.commands.pairing
 
 import chip.devicecontroller.ChipDeviceController
+import chip.devicecontroller.CommissionParameters
 import com.matter.controller.commands.common.CredentialsIssuer
 
 class PairAlreadyDiscoveredCommand(
@@ -39,7 +40,7 @@ class PairAlreadyDiscoveredCommand(
         getRemotePort(),
         getDiscriminator(),
         getSetupPINCode(),
-        null
+        CommissionParameters.Builder().build()
       )
     currentCommissioner().setCompletionListener(this)
     waitCompleteMs(getTimeoutMillis())

@@ -1,6 +1,7 @@
 package com.matter.controller.commands.bdx
 
 import chip.devicecontroller.ChipDeviceController
+import chip.devicecontroller.CommissionParameters
 import chip.devicecontroller.DiagnosticLogType
 import chip.devicecontroller.DownloadLogCallback
 import com.matter.controller.commands.common.CredentialsIssuer
@@ -70,7 +71,7 @@ class PairOnNetworkLongDownloadLogCommand(
         MATTER_PORT,
         getDiscriminator(),
         getSetupPINCode(),
-        null
+        CommissionParameters.Builder().build()
       )
     currentCommissioner().setCompletionListener(this)
     waitCompleteMs(getTimeoutMillis())
