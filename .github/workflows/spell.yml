@@ -33,5 +33,5 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - name: Checkout
-              uses: actions/checkout@v6
+              uses: actions/checkout@v7
             - uses: rojopolis/spellcheck-github-actions@0.60.0
