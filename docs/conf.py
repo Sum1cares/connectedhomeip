@@ -54,10 +54,11 @@ html_theme_options = {
     "icon_links": [],
 }
 
-# -- Vercel Web Analytics -----------------------------------------------------
+# -- Vercel Web Analytics and Speed Insights ----------------------------------
 
 html_js_files = [
     "js/vercel-analytics.js",
+    "js/vercel-speed-insights.js",
 ]
 
 # -- Options for MyST --------------------------------------------------------
