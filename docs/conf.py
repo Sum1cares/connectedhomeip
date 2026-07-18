@@ -56,7 +56,7 @@ html_theme_options = {
 
 # -- Vercel Web Analytics and Speed Insights ----------------------------------
 
-html_js_files = [
+html_js_files = globals().get("html_js_files", []) + [
     "js/vercel-analytics.js",
     "js/vercel-speed-insights.js",
 ]
