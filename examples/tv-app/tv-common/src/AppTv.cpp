@@ -31,6 +31,7 @@
 #include <app/server/Dnssd.h>
 #include <app/server/Server.h>
 #include <controller/CHIPCluster.h>
+#include <crypto/CHIPCryptoPAL.h>
 #include <lib/core/CHIPCore.h>
 #include <lib/core/DataModelTypes.h>
 #include <lib/support/CHIPArgParser.hpp>
@@ -39,6 +40,7 @@
 #include <lib/support/ZclString.h>
 #include <platform/CHIPDeviceLayer.h>
 #include <platform/DeviceInstanceInfoProvider.h>
+#include <setup_payload/SetupPayload.h>
 
 #include <string>
 
@@ -134,9 +136,37 @@ class MyPasscodeService : public PasscodeService
 
     PasscodeInfo GetCommissionerPasscode(uint16_t vendorId, uint16_t productId, chip::CharSpan rotatingId) override
     {
-        // TODO: randomly generate this value
-        ChipLogDetail(AppServer, "GetCommissionerPasscode: returning a passcode");
-        return { 12345678, 8 };
+        // Generate a cryptographically random passcode valid per Matter spec section 5.1.1.1.
+        // Restrict to [kMinPasscode, kMaxPasscode] so the passcode is always exactly 8 digits
+        // (no leading zeros).  IsValidSetupPIN additionally rejects a small number of predictable
+        // sequences (e.g. 11111111, 12345678, 87654321) that are forbidden by the spec even though
+        // they fall within this numeric range.
+        constexpr uint32_t kMinPasscode  = 10000000;
+        constexpr uint32_t kMaxPasscode  = 99999998;
+        constexpr uint32_t kPasscodeSpan = kMaxPasscode - kMinPasscode + 1; // 89999999
+        // Use rejection sampling to avoid modulo bias: discard raw values in the
+        // partial last "bucket" so every value in [kMinPasscode, kMaxPasscode] has
+        // equal probability.  kRejectThreshold = (2^32) % kPasscodeSpan ≈ 64967343;
+        // ~1.5% of values are discarded, so the inner loop almost always runs once.
+        constexpr uint32_t kRejectThreshold = (static_cast<uint64_t>(UINT32_MAX) + 1) % kPasscodeSpan;
+        uint32_t raw;
+        uint32_t passcode;
+        do
+        {
+            do
+            {
+                if (chip::Crypto::DRBG_get_bytes(reinterpret_cast<uint8_t *>(&raw), sizeof(raw)) != CHIP_NO_ERROR)
+                {
+                    ChipLogError(AppServer, "GetCommissionerPasscode: secure RNG failure, passcode unavailable");
+                    return { 0, 0 };
+                }
+            } while (raw < kRejectThreshold); // discard values that would produce modulo bias
+            passcode = (raw % kPasscodeSpan) + kMinPasscode; // map to [kMinPasscode, kMaxPasscode]
+            // IsValidSetupPIN rejects the small set of spec-forbidden sequences; retry if needed.
+        } while (!chip::PayloadContents::IsValidSetupPIN(passcode));
+
+        ChipLogDetail(AppServer, "GetCommissionerPasscode: returning a randomly generated passcode");
+        return { passcode, 8 };
     }
 
     void FetchCommissionPasscodeFromContentApp(uint16_t vendorId, uint16_t productId, CharSpan rotatingId) override
