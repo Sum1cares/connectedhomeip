@@ -1,6 +1,10 @@
 name: Manually Roll, Build, and Push Docker Images
 on:
   workflow_dispatch:
+
+permissions:
+  contents: write
+
 jobs:
   roll_version:
     runs-on: ubuntu-latest

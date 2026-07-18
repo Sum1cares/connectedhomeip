@@ -24,6 +24,9 @@ concurrency:
 env:
     CHIP_LOG_TIMESTAMPS: false
 
+permissions:
+    contents: read
+
 jobs:
     zap_regeneration:
         name: ZAP Regeneration
