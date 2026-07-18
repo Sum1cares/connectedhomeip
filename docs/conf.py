@@ -54,6 +54,12 @@ html_theme_options = {
     "icon_links": [],
 }
 
+# -- Vercel Web Analytics -----------------------------------------------------
+
+html_js_files = [
+    "js/vercel-analytics.js",
+]
+
 # -- Options for MyST --------------------------------------------------------
 
 myst_heading_anchors = 6
