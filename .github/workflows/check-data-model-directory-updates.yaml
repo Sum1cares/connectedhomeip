@@ -25,7 +25,7 @@ jobs:
       image: ghcr.io/project-chip/chip-build
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 2
 
@@ -87,7 +87,7 @@ jobs:
       image: ghcr.io/project-chip/chip-build
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Setup pip modules we use
         run: |
             python3 -m venv out/venv
