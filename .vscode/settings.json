@@ -207,5 +207,8 @@
     },
     "files.exclude": {
         "**/examples/**/third_party/connectedhomeip/**": true
-    }
+    },
+    "python.testing.pytestArgs": ["."],
+    "python.testing.unittestEnabled": false,
+    "python.testing.pytestEnabled": true
 }
