@@ -1,3 +1,4 @@
+# Sphinx documentation dependencies
 docutils==0.22.4
 Sphinx==9.0.4
 sphinx-book-theme
@@ -6,3 +7,6 @@ myst-parser>=5.1.0
 breathe>=4.36.0
 pydata-sphinx-theme==0.20.0
 pydoc-markdown>=4.8.2
+
+# Note: Vercel Speed Insights is integrated via JavaScript (docs/_static/vercel-speed-insights.js)
+# No Python package installation required. See docs/conf.py for configuration.
