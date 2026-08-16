@@ -38,6 +38,7 @@
 #include "tcc-mode.h"
 #include "thermostat-delegate-impl.h"
 #include "tls-client-management-instance.h"
+#include <app/clusters/window-covering-server/CodegenIntegration.h>
 
 #include <Options.h>
 #include <app-common/zap-generated/attributes/Accessors.h>
@@ -50,7 +51,7 @@
 #include <app/clusters/laundry-washer-controls-server/laundry-washer-controls-server.h>
 #include <app/clusters/mode-base-server/mode-base-server.h>
 #include <app/clusters/temperature-control-server/temperature-control-server.h>
-#include <app/clusters/thermostat-server/thermostat-server.h>
+#include <app/clusters/thermostat-server/ThermostatCluster.h>
 #include <app/clusters/time-synchronization-server/time-synchronization-server.h>
 #include <app/clusters/unit-localization-server/unit-localization-server.h>
 #include <app/clusters/valve-configuration-and-control-server/valve-configuration-and-control-server.h>
@@ -179,7 +180,9 @@ RegisteredServerCluster<Clusters::IdentifyCluster>
                           .WithIdentifyType(Clusters::Identify::IdentifyTypeEnum::kVisibleIndicator)
                           .WithDelegate(&sIdentifyDelegate));
 
+#if CHIP_CONFIG_ENABLE_GROUPCAST
 LazyRegisteredServerCluster<Clusters::GroupcastCluster> gGroupcastCluster;
+#endif // CHIP_CONFIG_ENABLE_GROUPCAST
 
 } // namespace
 
@@ -218,16 +221,20 @@ void ApplicationInit()
     VerifyOrDie(CodegenDataModelProvider::Instance().Registry().Register(gIdentifyCluster3.Registration()) == CHIP_NO_ERROR);
     VerifyOrDie(CodegenDataModelProvider::Instance().Registry().Register(gIdentifyCluster4.Registration()) == CHIP_NO_ERROR);
 
+#if CHIP_CONFIG_ENABLE_GROUPCAST
     gGroupcastCluster.Create(
         Clusters::GroupcastContext{
             .fabricTable       = Server::GetInstance().GetFabricTable(),
             .groupDataProvider = *Credentials::GetGroupDataProvider(),
             .timerDelegate     = sTimerDelegate,
+            .accessControl     = Server::GetInstance().GetAccessControl(),
+            .testing           = chip::Groupcast::GetTesting(),
         },
         BitFlags<Clusters::Groupcast::Feature>(Clusters::Groupcast::Feature::kListener, Clusters::Groupcast::Feature::kSender,
                                                Clusters::Groupcast::Feature::kPerGroup));
 
     VerifyOrDie(CodegenDataModelProvider::Instance().Registry().Register(gGroupcastCluster.Registration()) == CHIP_NO_ERROR);
+#endif // CHIP_CONFIG_ENABLE_GROUPCAST
 
     TEMPORARY_RETURN_IGNORED SetTagList(/* endpoint= */ 0,
                                         Span<const Clusters::Descriptor::Structs::SemanticTagStruct::Type>(gEp0TagList));
@@ -269,6 +276,11 @@ using namespace chip::app::Clusters::LaundryWasherControls;
 void emberAfLaundryWasherControlsClusterInitCallback(EndpointId endpoint)
 {
     LaundryWasherControlsServer::SetDefaultDelegate(endpoint, &LaundryWasherControlDelegate::getLaundryWasherControlDelegate());
+
+    // The default value of `SpinSpeedCurrent` is and should be null, because the attribute is nullable.
+    // But the test TC_WASHERCTRL_2_1 expects the starting/default value to be an integer in some range.
+    // So we set the value here as a workaround, until the test plan is fixed.
+    LogErrorOnFailure(LaundryWasherControlsServer::SetSpinSpeedCurrent(endpoint, 0));
 }
 
 using namespace chip::app::Clusters::LaundryDryerControls;

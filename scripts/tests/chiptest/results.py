@@ -20,15 +20,21 @@ import datetime
 import enum
 import json
 import logging
+import threading
 import time
-from collections.abc import Callable, Iterable
-from dataclasses import asdict, dataclass, field
+from collections import defaultdict
+from collections.abc import Iterable, Iterator, Mapping
+from dataclasses import dataclass, field, fields, is_dataclass
 from pathlib import Path
-from typing import Any
+from types import TracebackType
+from typing import Any, TypeAlias
 
-from chiptest.log_config import LogConfig
+from chiptest.concurrency.context import TerminableThread
+from chiptest.concurrency.work_queue import CancellableQueue, EndOfQueue
 
 log = logging.getLogger(__name__)
+
+ExceptionInfoT: TypeAlias = BaseException | str | None
 
 
 class TestStatus(enum.StrEnum):
@@ -60,10 +66,11 @@ class TestResult:
     """Summary of execution of a single test."""
 
     name: str
+    worker_id: int
     iteration: int
     status: TestStatus
     duration_seconds: float
-    exception: BaseException | str | None = None
+    exception: ExceptionInfoT = None
 
     @property
     def name_decorated(self) -> str:
@@ -74,47 +81,44 @@ class TestResult:
         self.status = TestStatus(self.status)
 
     @classmethod
-    def run_test(cls, name: str, iteration: int, dry_run: bool, log_config: LogConfig, test_func: Callable[[], None]) -> TestResult:
-        """Run a test and generate execution summary.
-
-        Mind that it catches any exception and saves it in the result. It's up to the caller to reraise the exception.
+    @contextlib.contextmanager
+    def measure_execution(cls, name: str, worker_id: int, iteration: int, dry_run: bool) -> Iterator[TestResult]:
         """
-        with log_config.fmt_context(task=name, level=log_config.level_tests):
-            log.info("%s", "Would run test" if dry_run else "Starting test")
+        Measure execution of a context and generate test result.
 
-            result = cls(name, iteration, TestStatus.FAILED, duration_seconds=0, exception=None)
-            test_start = test_end = time.monotonic()
+        Mind that it catches any exception and saves them in the result without reraising. It's up to the caller to reraise the
+        exception.
+        """
+        log.info("%s", "Would run test" if dry_run else "Starting test")
+        result = cls(name, worker_id, iteration, TestStatus.DRY_RUN if dry_run else TestStatus.PASSED, 0.0)
+        test_start = time.monotonic()
+        try:
             try:
-                test_func()
-                test_end = time.monotonic()
-                result.status = TestStatus.DRY_RUN if dry_run else TestStatus.PASSED
-            except BaseException as e:
-                test_end = time.monotonic()
-                result.exception = e
-
-                if isinstance(e, KeyboardInterrupt):
-                    result.status = TestStatus.CANCELLED
-                else:
-                    result.status = TestStatus.FAILED
-                    if (pcap_path := Path("thread.pcap")).exists():
-                        print("base64 -d - >thread.pcap <<EOF")
-                        print(base64.b64encode(pcap_path.read_bytes()).decode("ascii"))
-                        print("EOF")
+                yield result
             finally:
-                result.duration_seconds = test_end - test_start
+                result.duration_seconds = time.monotonic() - test_start
+        except BaseException as e:
+            result.exception = e
 
-                symbol = result.status.symbol
-                match result.status:
-                    case TestStatus.PASSED:
-                        log.info("%s Completed in %0.2f seconds", symbol, result.duration_seconds)
-                    case TestStatus.CANCELLED:
-                        log.warning("%s Cancelled after %0.2f seconds", symbol, result.duration_seconds)
-                    case TestStatus.FAILED:
-                        assert isinstance(result.exception, BaseException), "Exception should be set for failed test results"
-                        log.error("%s Failed in %0.2f seconds", symbol, result.duration_seconds,
-                                  exc_info=(type(result.exception), result.exception, result.exception.__traceback__))
+            if isinstance(e, KeyboardInterrupt):
+                result.status = TestStatus.CANCELLED
+            else:
+                result.status = TestStatus.FAILED
+                if (pcap_path := Path("thread.pcap")).exists():
+                    print("base64 -d - >thread.pcap <<EOF")
+                    print(base64.b64encode(pcap_path.read_bytes()).decode("ascii"))
+                    print("EOF")
 
-                return result
+        symbol = result.status.symbol
+        match result.status:
+            case TestStatus.PASSED:
+                log.info("%s Completed in %0.2f seconds", symbol, result.duration_seconds)
+            case TestStatus.CANCELLED:
+                log.warning("%s Cancelled after %0.2f seconds", symbol, result.duration_seconds)
+            case TestStatus.FAILED:
+                assert isinstance(result.exception, BaseException), "Exception should be set for failed test results"
+                log.error("%s Failed in %0.2f seconds", symbol, result.duration_seconds,
+                          exc_info=(type(result.exception), result.exception, result.exception.__traceback__))
 
 
 @dataclass
@@ -125,7 +129,7 @@ class RunStats:
     failed: int = field(default=0, init=False)
     cancelled: int = field(default=0, init=False)
     mean_duration: float = field(default=0.0, init=False)
-    exception_first: BaseException | str | None = field(default=None, init=False)
+    exception_first: ExceptionInfoT = field(default=None, init=False)
 
     @property
     def pass_rate(self) -> float:
@@ -166,11 +170,26 @@ class RunStats:
 
 @dataclass
 class RunSummary(RunStats):
-    """Summary of a test run, including results of all iterations and aggregated statistics (both global and per-test)."""
+    """
+    Summary of a test run, including results of all iterations and aggregated statistics (both global and per-test).
+
+    If operated in multithreaded environment, it should be used as a context manager to ensure thread safety when recording results.
+    """
     iterations: int
-    run_timestamp: datetime.datetime | str = field(default_factory=lambda: datetime.datetime.now(datetime.timezone.utc))
+    tests_per_iteration: int
+    run_timestamp: datetime.datetime | str = field(default_factory=lambda: datetime.datetime.now(datetime.UTC))
     results: list[TestResult] = field(default_factory=list, init=False)
     test_stats: dict[str, RunStats] = field(default_factory=dict, init=False)
+    exceptions: defaultdict[int, dict[str, ExceptionInfoT]] = field(default_factory=lambda: defaultdict(dict), init=False)
+
+    def __post_init__(self):
+        self._lock = threading.Lock()
+
+    def __enter__(self):
+        return self._lock.__enter__()
+
+    def __exit__(self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None) -> None:
+        return self._lock.__exit__(exc_type, exc_val, exc_tb)
 
     def record(self, result: TestResult) -> None:
         """Record a test result."""
@@ -184,15 +203,30 @@ class RunSummary(RunStats):
             self.test_stats[result.name] = RunStats()
         self.test_stats[result.name].record(result)
 
+        # Record exception per iteration.
+        self.exceptions[result.iteration][result.name] = result.exception
+
+    @property
+    def expected_test_count(self) -> int:
+        """Total number of tests expected to be run across all iterations."""
+        return self.iterations * self.tests_per_iteration
+
+    @property
+    def current_iteration(self) -> int:
+        """Estimate the current iteration based on the number of recorded results."""
+        return len(self.exceptions)
+
     def write_json(self, path: Path) -> None:
         """Write the test run summary to a JSON file."""
         def encode(obj: Any) -> Any:
             """JSON encoder for non-serializable objects.
 
-            We cannot use json.dumps(default) for all cases, as it doesn't touch floats.
+            We cannot use json.dumps(default) for all cases, as it doesn't touch floats, and `asdict` doesn't work for defaultdict.
             """
-            if isinstance(obj, dict):
-                return {key: encode(value) for key, value in obj.items()}
+            if is_dataclass(obj):
+                return {f.name: encode(getattr(obj, f.name)) for f in fields(obj)}
+            if isinstance(obj, Mapping):
+                return {encode(key): encode(value) for key, value in obj.items()}
             if isinstance(obj, Iterable) and not isinstance(obj, (str, bytes)):
                 return [encode(item) for item in obj]
             if isinstance(obj, datetime.datetime):
@@ -202,14 +236,14 @@ class RunSummary(RunStats):
             return obj
 
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(encode(asdict(self)), indent=2, default=repr))
+        path.write_text(json.dumps(encode(self), indent=2, default=repr))
         log.info("Test run summary written to %s", path)
 
     @classmethod
     def from_json(cls, path: Path) -> RunSummary:
         """Read the test run summary from a JSON file."""
         raw = json.loads(path.read_text())
-        ret = RunSummary(iterations=raw.get("iterations", 1))
+        ret = RunSummary(iterations=raw.get("iterations", 1), tests_per_iteration=raw.get("tests_per_iteration", 0))
 
         # Recover a timestamp.
         timestamp = raw.get("run_timestamp", "unknown")
@@ -318,7 +352,7 @@ class RunSummary(RunStats):
                               no_content_msg="No failures recorded",
                               headers_fmt=(("Test name", "<"), ("Iter", ">"), ("Duration", ">")),
                               rows=((r.name_decorated, str(r.iteration), f"{r.duration_seconds:.2f}s")
-                              for r in sorted(failed_results, key=lambda x: x.name)))
+                                    for r in sorted(failed_results, key=lambda x: x.name)))
 
         if show_flaky and self.iterations > 1:
             flaky = tuple((name, stats) for name, stats in self.test_stats.items() if stats.failed > 0)
@@ -326,7 +360,7 @@ class RunSummary(RunStats):
                               no_content_msg="No flaky results",
                               headers_fmt=(("Test name", "<"), ("Failures", ">"), ("Rate", ">")),
                               rows=((name, f"{stats.failed}/{stats.total_runs:<2}", f"{100 * stats.fail_rate:.1f}%")
-                              for name, stats in sorted(flaky, key=lambda item: -item[1].failed)))
+                                    for name, stats in sorted(flaky, key=lambda item: -item[1].failed)))
 
         if top_slowest:
             slowest = sorted((r for r in self.results if r.status not in (TestStatus.DRY_RUN, TestStatus.CANCELLED)),
@@ -339,7 +373,7 @@ class RunSummary(RunStats):
             self._print_table(title=f"SLOWEST {len(slowest)} TEST RUNS:", no_content_msg="No tests to show for slowest list",
                               headers_fmt=(("Test name", "<"), ("Status", "<"), ("Iter", ">"), ("Duration", ">")),
                               rows=((r.name_decorated, r.status, str(r.iteration), f"{r.duration_seconds:.2f}s")
-                              for r in slowest))
+                                    for r in slowest))
 
         if show_all:
             self._print_table(title="STATS OF ALL TESTS:", no_content_msg="No tests to show", last_col_max_width=20,
@@ -349,3 +383,76 @@ class RunSummary(RunStats):
 
         # Final vertical padding.
         print()
+
+
+class ResultError(Exception):
+    """Exception raised when processing results."""
+
+
+@dataclass(eq=False)
+class ResultProcessingThread(TerminableThread):
+    """Thread that processes test results from the result queue, keeps track of test run summary and prints it at the end."""
+
+    summary: RunSummary
+    expected_failures: int
+    keep_going: bool
+    result_queue: CancellableQueue[TestResult]
+    exception: BaseException | None = None
+
+    def __post_init__(self) -> None:
+        super().__init__(name="Results")
+
+    def run(self) -> None:
+        try:
+            log.debug("Starting result processing thread")
+            while True:
+                self._process_result(self.result_queue.get())
+        except EndOfQueue:
+            log.debug("No more results to process, finishing result processing thread")
+        except BaseException as e:
+            self.exception = e
+        finally:
+            self.result_queue.close()
+            log.debug("Result processing thread finished")
+
+    def _process_result(self, result: TestResult) -> None:
+        iteration = result.iteration
+        with self.summary:
+            self.summary.record(result)
+
+            # Check for keep going on failure.
+            if result.exception is not None and not isinstance(result.exception, KeyboardInterrupt) and not self.keep_going:
+                raise ResultError("Test failed and --keep-going flag is not set.")
+
+            # Check if all results for the iteration are in.
+            if len(self.summary.exceptions[iteration]) < self.summary.tests_per_iteration:
+                return
+
+            log.debug("All results for iteration %i are in, checking failure count", iteration)
+            observed_failures = sum(exc is not None and not isinstance(exc, KeyboardInterrupt)
+                                    for exc in self.summary.exceptions[iteration].values())
+            if observed_failures != self.expected_failures:
+                raise ResultError(
+                    f"Iteration {iteration}: expected failure count {self.expected_failures}, but got {observed_failures}")
+
+    def resource_terminate(self) -> None:
+        """Terminate the result processing thread."""
+        try:
+            # Close the result queue to unblock the thread if it's waiting for results.
+            self.result_queue.close()
+
+            if isinstance(self.exception, KeyboardInterrupt):
+                raise self.exception
+            if self.exception is not None:
+                raise ResultError("Result processing thread terminated with an exception") from self.exception
+
+            if not self.resource_thread_join():
+                raise RuntimeError("Result processing thread is still alive, it might be stuck on processing results")
+        except Exception as e:
+            # Try to forcefully cancel the result queue to unblock the thread.
+            self.result_queue.cancel()
+
+            # Wait for the thread to finish processing results if it had been started.
+            if not self.resource_thread_join():
+                raise RuntimeError(
+                    "Failed to terminate result processing thread. Result summary may be incomplete or corrupted") from e
