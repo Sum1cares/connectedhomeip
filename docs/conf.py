@@ -47,6 +47,9 @@ html_theme = "sphinx_book_theme"
 html_logo = "_static/images/logo.png"
 html_favicon = "_static/images/favicon.ico"
 html_static_path = ["_static"]
+html_js_files = [
+    "vercel-speed-insights.js",
+]
 html_theme_options = {
     "github_url": "https://github.com/project-chip/connectedhomeip",
     "repository_url": "https://github.com/project-chip/connectedhomeip",
