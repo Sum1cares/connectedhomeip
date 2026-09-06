@@ -70,6 +70,24 @@ jobs:
               uses: ./.github/actions/checkout-submodules-and-bootstrap
               with:
                 platform: linux
+            - name: Ensure Perfetto SDK submodule present
+              shell: bash
+              run: |
+                set -euo pipefail
+                SDK_CC="third_party/perfetto/repo/sdk/perfetto.cc"
+                SDK_H="third_party/perfetto/repo/sdk/perfetto.h"
+                if [[ ! -f "$SDK_CC" || ! -f "$SDK_H" ]]; then
+                  echo "Perfetto SDK missing; forcing submodule init for third_party/perfetto/repo"
+                  git submodule update --init --force --depth 1 third_party/perfetto/repo
+                fi
+                if [[ ! -f "$SDK_CC" || ! -f "$SDK_H" ]]; then
+                  echo "::error::Perfetto SDK still missing after submodule update ($SDK_CC / $SDK_H)."
+                  ls -la third_party/perfetto/repo || true
+                  git -C third_party/perfetto/repo rev-parse HEAD || true
+                  exit 1
+                fi
+                echo "Perfetto SDK OK: $(git -C third_party/perfetto/repo rev-parse --short HEAD)"
+
             - name: Initialize CodeQL
               if: ${{ inputs.run-codeql  }}
               uses: github/codeql-action/init@99df26d4f13ea111d4ec1a7dddef6063f76b97e9 # v4.37.0
