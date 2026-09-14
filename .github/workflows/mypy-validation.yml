@@ -31,6 +31,9 @@ on:
       - 'scripts/tests/chiptest/**/*.py'
       - 'scripts/tests/run_test_suite.py'
 
+permissions:
+  contents: read
+
 jobs:
   mypy-check:
     runs-on: ubuntu-latest

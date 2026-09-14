@@ -27,6 +27,9 @@ on:
             - "**.md"
             - ".github/.wordlist.txt"
 
+permissions:
+    contents: read
+
 jobs:
     check-spellcheck:
         name: Check Spelling - pyspelling

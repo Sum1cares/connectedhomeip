@@ -24,6 +24,9 @@ on:
 env:
     CHIP_LOG_TIMESTAMPS: false
 
+permissions:
+    contents: write
+
 jobs:
     esp32:
         name: ESP32

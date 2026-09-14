@@ -25,6 +25,10 @@ on:
     #     description: 'Branch'
     #     required: false
     #     type: string
+
+permissions:
+  contents: write
+
 jobs:
     tag_main_release:
         name: Tag Current Release
