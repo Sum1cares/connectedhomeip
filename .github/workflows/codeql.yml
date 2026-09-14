@@ -21,8 +21,21 @@ on:
   schedule:
     - cron: '0 5 * * *'
 
+permissions: {}
+
 jobs:
+  skip_advanced_codeql_on_forks:
+    if: github.repository != 'project-chip/connectedhomeip'
+    permissions: {}
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Skipping advanced CodeQL workflow outside project-chip/connectedhomeip because code scanning default setup rejects SARIF uploads from advanced configurations."
   analyze:
+    if: github.repository == 'project-chip/connectedhomeip'
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
     uses: ./.github/workflows/build.yaml
     with:
       run-codeql: true
