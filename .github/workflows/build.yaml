@@ -74,19 +74,31 @@ jobs:
               shell: bash
               run: |
                 set -euo pipefail
-                SDK_CC="third_party/perfetto/repo/sdk/perfetto.cc"
-                SDK_H="third_party/perfetto/repo/sdk/perfetto.h"
-                if [[ ! -f "$SDK_CC" || ! -f "$SDK_H" ]]; then
-                  echo "Perfetto SDK missing; forcing submodule init for third_party/perfetto/repo"
+                PERFETTO_DIR="third_party/perfetto/repo"
+                SDK_GENERATOR="$PERFETTO_DIR/tools/gen_amalgamated"
+                SDK_CC="$PERFETTO_DIR/sdk/perfetto.cc"
+                SDK_H="$PERFETTO_DIR/sdk/perfetto.h"
+                if [[ ! -f "$SDK_GENERATOR" ]]; then
+                  echo "Perfetto source missing; forcing submodule init for third_party/perfetto/repo"
                   git submodule update --init --force --depth 1 third_party/perfetto/repo
                 fi
-                if [[ ! -f "$SDK_CC" || ! -f "$SDK_H" ]]; then
-                  echo "::error::Perfetto SDK still missing after submodule update ($SDK_CC / $SDK_H)."
-                  ls -la third_party/perfetto/repo || true
-                  git -C third_party/perfetto/repo rev-parse HEAD || true
+                if [[ ! -f "$SDK_GENERATOR" ]]; then
+                  echo "::error::Perfetto SDK generator missing after submodule update ($SDK_GENERATOR)."
+                  ls -la "$PERFETTO_DIR" || true
+                  git -C "$PERFETTO_DIR" rev-parse HEAD || true
                   exit 1
                 fi
-                echo "Perfetto SDK OK: $(git -C third_party/perfetto/repo rev-parse --short HEAD)"
+                if [[ ! -f "$SDK_CC" || ! -f "$SDK_H" ]]; then
+                  echo "Generating Perfetto SDK amalgamation"
+                  "$SDK_GENERATOR" --output "$PERFETTO_DIR/sdk/perfetto"
+                fi
+                if [[ ! -f "$SDK_CC" || ! -f "$SDK_H" ]]; then
+                  echo "::error::Perfetto SDK missing after generation ($SDK_CC / $SDK_H)."
+                  ls -la "$PERFETTO_DIR/sdk" || true
+                  git -C "$PERFETTO_DIR" rev-parse HEAD || true
+                  exit 1
+                fi
+                echo "Perfetto SDK OK: $(git -C "$PERFETTO_DIR" rev-parse --short HEAD)"
 
             - name: Initialize CodeQL
               if: ${{ inputs.run-codeql  }}
