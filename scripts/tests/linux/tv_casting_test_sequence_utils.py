@@ -57,6 +57,7 @@ class Step:
         timeout_sec: int | None = DEFAULT_TIMEOUT_SEC,
         output_msg: list[str] | None = None,
         input_cmd: str | None = None,
+        capture_regex: str | None = None,
     ):
         # Validate that either `output_msg` or `input_cmd` is provided, but not both.
         if output_msg is not None and input_cmd is not None:
@@ -76,6 +77,9 @@ class Step:
 
         # Define the `input_cmd` that we need to send to either the `App.TV_APP` or `App.TV_CASTING_APP`.
         self.input_cmd = input_cmd
+
+        # Define an optional regex for capturing values from matched output.
+        self.capture_regex = capture_regex
 
 
 class Sequence:

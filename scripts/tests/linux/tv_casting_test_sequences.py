@@ -71,7 +71,7 @@ VENDOR_ID = 0xFFF1  # 0xFFF1 = 65521; Spec 7.20.2.1 MEI code: test vendor IDs ar
 PRODUCT_ID = 0x8001  # 0x8001 = 32769 = Test product id
 DEVICE_TYPE_CASTING_VIDEO_PLAYER = 0x23  # 0x23 = 35 = Device type library 10.3: Casting Video Player
 
-COMMISSIONER_GENERATED_PASSCODE = '0x00BC_614E'  # 0x00BC_614E = 12345678 = Default commissioner generated passcode
+COMMISSIONER_GENERATED_PASSCODE_DECIMAL = '{commissioner_generated_passcode_decimal}'
 
 # Value to verify the subscription state against in the Linux tv-casting-app output.
 ATTRIBUTE_CURRENT_PLAYBACK_STATE = 0x0000_0000  # Application Cluster Spec 6.10.6 Attribute ID: Current State of Playback
@@ -204,7 +204,8 @@ test_sequences = [
 
             # Validate that we received the cast request with the casting passcode on the tv-app output.
             Step(app=App.TV_APP, output_msg=[
-                 f'------PROMPT USER: Test TV casting app is requesting permission to cast to this TV. Casting passcode: [{COMMISSIONER_GENERATED_PASSCODE}].']),
+                 '------PROMPT USER: Test TV casting app is requesting permission to cast to this TV. Casting passcode:'],
+                 capture_regex=r'Casting passcode: \[(?P<commissioner_generated_passcode_hex>0x[0-9a-fA-F_]+)\]'),
 
             # Validate that the tv-casting-app received the message from the tv-app indicating that the tv-app is now displaying the passcode to the user.
             Step(app=App.TV_CASTING_APP, output_msg=['Commissioner Declaration Start',
@@ -212,14 +213,14 @@ test_sequences = [
 
             # Validate that the user is prompted to input passcode from the tv-app on the tv-casting-app output.
             Step(app=App.TV_CASTING_APP, output_msg=['Awaiting user input', 'Input the Commissioner-Generated passcode displayed on the CastingPlayer UX.',
-                 f'cast setcommissionerpasscode {int(COMMISSIONER_GENERATED_PASSCODE, 16)}', 'Awaiting user input']),
+                 f'cast setcommissionerpasscode {COMMISSIONER_GENERATED_PASSCODE_DECIMAL}', 'Awaiting user input']),
 
             # Send `cast setcommissionerpasscode {COMMISSIONER_GENERATED_PASSCODE}\n` to the tv-casting-app subprocess.
-            Step(app=App.TV_CASTING_APP, input_cmd=f'cast setcommissionerpasscode {int(COMMISSIONER_GENERATED_PASSCODE, 16)}\n'),
+            Step(app=App.TV_CASTING_APP, input_cmd=f'cast setcommissionerpasscode {COMMISSIONER_GENERATED_PASSCODE_DECIMAL}\n'),
 
             # Validate the commissioner passcode that the user entered on the tv-casting-app output.
             Step(app=App.TV_CASTING_APP, output_msg=[
-                f'CommandHandler() setcommissionerpasscode user-entered passcode: {int(COMMISSIONER_GENERATED_PASSCODE, 16)}']),
+                f'CommandHandler() setcommissionerpasscode user-entered passcode: {COMMISSIONER_GENERATED_PASSCODE_DECIMAL}']),
 
             # Validate that the `IdentificationDeclaration` message sent from the tv-casting-app to the tv-app will contain the following entries:
             # mCommissionerPasscode:      true                        -> This flag instructs the commissioner to use the commissioner-generated-passcode flow for commissioning.

@@ -17,6 +17,7 @@
 import glob
 import logging
 import os
+import re
 import sys
 import tempfile
 import time
@@ -102,7 +103,7 @@ def stop_app(test_sequence_name: str, app_name: str, app: ProcessOutputCapture):
 
 def parse_output_msg_in_subprocess(
     processes: RunningProcesses, test_sequence_name: str, test_sequence_step: Step
-):
+) -> list[str]:
     """Parse the output of a given `app` subprocess and validate its output against the expected `output_msg` in the given `Step`."""
 
     if not test_sequence_step.output_msg:
@@ -159,9 +160,37 @@ def parse_output_msg_in_subprocess(
                     log.info("%s - '%s'", test_sequence_name, line)
 
                 # successful completion
-                return
+                return msg_block
 
     raise TestStepException("Unexpected exit", test_sequence_name, test_sequence_step)
+
+
+def replace_runtime_values(value: str, runtime_values: dict[str, str]) -> str:
+    for name, replacement in runtime_values.items():
+        value = value.replace(f"{{{name}}}", replacement)
+    return value
+
+
+def capture_runtime_values(
+    test_sequence_step: Step, output_lines: list[str] | None, test_sequence_name: str
+) -> dict[str, str]:
+    if not test_sequence_step.capture_regex:
+        return {}
+
+    match = re.search(test_sequence_step.capture_regex, "\n".join(output_lines or []))
+    if not match:
+        raise TestStepException(
+            f"{test_sequence_name} - Could not capture expected value from subprocess output.",
+            test_sequence_name,
+            test_sequence_step,
+        )
+
+    runtime_values = match.groupdict()
+    if "commissioner_generated_passcode_hex" in runtime_values:
+        runtime_values["commissioner_generated_passcode_decimal"] = str(
+            int(runtime_values["commissioner_generated_passcode_hex"], 16)
+        )
+    return runtime_values
 
 
 def send_input_cmd_to_subprocess(
@@ -223,18 +252,31 @@ def run_test_sequence_steps(
     if test_sequence_steps is None:
         log.error("No test sequence steps provided.")
 
+    runtime_values: dict[str, str] = {}
     while current_index < len(test_sequence_steps):
         # Current step in the list of steps.
         test_sequence_step = test_sequence_steps[current_index]
 
         # A test sequence step contains either an output_msg or input_cmd entry.
         if test_sequence_step.output_msg:
-            parse_output_msg_in_subprocess(
+            test_sequence_step.output_msg = [
+                replace_runtime_values(output_msg, runtime_values)
+                for output_msg in test_sequence_step.output_msg
+            ]
+            output_lines = parse_output_msg_in_subprocess(
                 processes,
                 test_sequence_name,
                 test_sequence_step,
             )
+            runtime_values.update(
+                capture_runtime_values(
+                    test_sequence_step, output_lines, test_sequence_name
+                )
+            )
         elif test_sequence_step.input_cmd:
+            test_sequence_step.input_cmd = replace_runtime_values(
+                test_sequence_step.input_cmd, runtime_values
+            )
             handle_input_cmd(
                 processes,
                 test_sequence_name,
