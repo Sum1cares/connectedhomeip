@@ -103,7 +103,7 @@ def stop_app(test_sequence_name: str, app_name: str, app: ProcessOutputCapture):
 
 def parse_output_msg_in_subprocess(
     processes: RunningProcesses, test_sequence_name: str, test_sequence_step: Step
-) -> list[str] | None:
+) -> list[str]:
     """Parse the output of a given `app` subprocess and validate its output against the expected `output_msg` in the given `Step`."""
 
     if not test_sequence_step.output_msg:
@@ -252,7 +252,7 @@ def run_test_sequence_steps(
     if test_sequence_steps is None:
         log.error("No test sequence steps provided.")
 
-    runtime_values = {}
+    runtime_values: dict[str, str] = {}
     while current_index < len(test_sequence_steps):
         # Current step in the list of steps.
         test_sequence_step = test_sequence_steps[current_index]

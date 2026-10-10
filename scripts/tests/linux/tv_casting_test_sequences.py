@@ -71,7 +71,6 @@ VENDOR_ID = 0xFFF1  # 0xFFF1 = 65521; Spec 7.20.2.1 MEI code: test vendor IDs ar
 PRODUCT_ID = 0x8001  # 0x8001 = 32769 = Test product id
 DEVICE_TYPE_CASTING_VIDEO_PLAYER = 0x23  # 0x23 = 35 = Device type library 10.3: Casting Video Player
 
-COMMISSIONER_GENERATED_PASSCODE_HEX = '{commissioner_generated_passcode_hex}'
 COMMISSIONER_GENERATED_PASSCODE_DECIMAL = '{commissioner_generated_passcode_decimal}'
 
 # Value to verify the subscription state against in the Linux tv-casting-app output.
