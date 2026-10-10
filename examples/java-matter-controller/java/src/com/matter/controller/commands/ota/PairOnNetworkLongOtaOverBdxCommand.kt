@@ -19,6 +19,7 @@
 package com.matter.controller.commands.ota
 
 import chip.devicecontroller.ChipDeviceController
+import chip.devicecontroller.CommissionParameters
 import chip.devicecontroller.GetConnectedDeviceCallbackJni.GetConnectedDeviceCallback
 import chip.devicecontroller.InvokeCallback
 import chip.devicecontroller.OTAProviderDelegate
@@ -227,7 +228,7 @@ class PairOnNetworkLongOtaOverBdxCommand(
         MATTER_PORT,
         getDiscriminator(),
         getSetupPINCode(),
-        null
+        CommissionParameters.Builder().build()
       )
     currentCommissioner().setCompletionListener(this)
     waitCompleteMs(getTimeoutMillis())
