@@ -18,6 +18,9 @@ on:
     paths:
       - "src/controller/data_model/controller-clusters.matter"
 
+permissions:
+  contents: read
+
 jobs:
   check_clusters_matter:
     name: Check controller-clusters.matter backwards compatibility
