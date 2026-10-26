@@ -59,7 +59,7 @@ jobs:
       #       })
 
       - name: Fail if `### Testing` section not in PR
-        if: (steps.check-testing.outcome == 'failure') && (github.event.pull_request.user.login != 'dependabot[bot]')
+        if: (steps.check-testing.outcome == 'failure') && (github.event.pull_request.user.login != 'dependabot[bot]') && !startsWith(github.event.pull_request.title, 'Revert ')
 
         run: |
           python -c 'import sys; print("Testing section missing (test failed)"); sys.exit(1)'
