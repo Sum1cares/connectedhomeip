@@ -14,7 +14,7 @@ jobs:
         id: check-testing
         continue-on-error: true
         run: |
-          python -c 'import sys; import os; pr_summary = os.environ["PR_BODY"]; sys.exit(0 if "### Testing" in pr_summary else 1)'
+          python -c 'import os, re, sys; pr_summary = os.environ["PR_BODY"]; is_generated_revert = re.fullmatch(r"Reverts [A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#[0-9]+", pr_summary.strip()) is not None; sys.exit(0 if "### Testing" in pr_summary or is_generated_revert else 1)'
 
       - name: Check for PR starting instructions
         env:
