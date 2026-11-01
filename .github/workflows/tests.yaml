@@ -43,6 +43,9 @@ env:
     CHIP_LOG_TIMESTAMPS: false
     OPENSSL_3_5_TEST_REGEX: 'TC_(OPCREDS_3_9|DA_1_10|DA_1_12|NETIM_1_[1-4])\.py$'
 
+permissions:
+    contents: read
+
 jobs:
     test_suites_linux:
         name: Test Suites - Linux

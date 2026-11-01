@@ -41,6 +41,10 @@ on:
               type: boolean
               default: false
 
+permissions:
+    contents: read
+    packages: write
+
 jobs:
     check_versions:
         name: Check changed images bump the version

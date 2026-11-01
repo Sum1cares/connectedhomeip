@@ -30,6 +30,9 @@ concurrency:
         'workflow_dispatch' && github.run_number) || github.sha }}
     cancel-in-progress: true
 
+permissions:
+    contents: read
+
 jobs:
     code-lints:
         runs-on: ubuntu-latest

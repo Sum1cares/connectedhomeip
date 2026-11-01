@@ -23,6 +23,8 @@ on:
             - ".gitmodules"
         types: [opened, synchronize, reopened, labeled, unlabeled]
 
+permissions: {}
+
 jobs:
     check-submodule-update-label:
         name: Check For Submodule Update Label
